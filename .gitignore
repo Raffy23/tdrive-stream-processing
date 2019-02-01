@@ -1,0 +1,9 @@
+# Exclude .idea directory
+.idea
+
+# Exclude scala build directories
+target
+
+# Exclude default dataset from Importer
+taxi-data/*.gz
+taxi-data/*.properties
