@@ -27,6 +27,7 @@ package object dto {
   case class TaxiLeftArea(id: TaxiID)
 
   case class TaxiSpeed(id: TaxiID, speed: Double)
+  case class TaxiSpeeding(id: TaxiID, speed: Double)
   object TaxiSpeed {
     def apply(data: (Taxi,Double)): TaxiSpeed = new TaxiSpeed(data._1.id, data._2)
   }
@@ -47,6 +48,7 @@ package object dto {
 
   case class TaxiData(taxi: Taxi, distance: Double, speed: Double, avgSpeed: Double) {
     def asTaxiSpeed = new TaxiSpeed(taxi.id, speed)
+    def asTaxiSpeeding = new TaxiSpeeding(taxi.id, speed)
   }
 
 }

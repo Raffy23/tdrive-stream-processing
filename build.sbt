@@ -23,8 +23,6 @@ lazy val taxiProcessor = (project in file("taxi-processor"))
 
       "org.slf4j" % "slf4j-api" % "1.7.25",
       "ch.qos.logback" % "logback-classic" % "1.2.3",
-
-      "net.debasishg" %% "redisclient" % "3.9"
     ),
 
     assembly / mainClass := Some("tdrive.TaxiJob"),
@@ -58,6 +56,8 @@ lazy val taxiWebServer = (project in file("web-server"))
       "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       "com.typesafe.akka" %% "akka-http" % "10.1.7",
+
+      "net.debasishg" %% "redisclient" % "3.9",
     )
   )
   .dependsOn(sharedJVM)

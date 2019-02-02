@@ -12,10 +12,10 @@ import org.apache.flink.streaming.api.scala.{OutputTag, StreamExecutionEnvironme
 import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
 import org.apache.flink.util.Collector
-import tdrive.shared.dto._
-import tdrive.util.{TaxiAkkaSink, TaxiDataCounter, TaxiKafkaSchema, TaxiRedisSink}
 import tdrive.Implicits._
 import tdrive.shared.Haversine
+import tdrive.shared.dto._
+import tdrive.util.{TaxiAkkaSink, TaxiDataCounter, TaxiKafkaSchema}
 
 /**
   * Created by 
@@ -30,12 +30,6 @@ object TaxiJob {
   def main(cmdArgs: Array[String]): Unit = {
     val args = ParameterTool.fromArgs(cmdArgs)
 
-    val redisSettings = TaxiRedisSink.Settings(
-      args.get("redis.server"),
-      args.getInt("redis.port"),
-      args.getInt("redis.maxConnections", 32)
-    )
-
     val kafkaProps = new Properties()
     kafkaProps.setProperty("bootstrap.servers", args.get("kafka.server"))
 
@@ -45,13 +39,13 @@ object TaxiJob {
     val source = env.addSource(new FlinkKafkaConsumer[Taxi]("taxi", TaxiKafkaSchema, kafkaProps))
 
     val locationOutput      = OutputTag[TaxiLocation]("taxi-location")
-    val currentSpeedOutput  = OutputTag[TaxiSpeed]("taxi-cur_speed")
+    val currentSpeedOutput  = OutputTag[TaxiSpeeding]("taxi-cur_speed")
     val avgSpeedOutput      = OutputTag[TaxiSpeed]("taxi-avg_speed")
     //val outOfAreaOutput     = OutputTag[TaxiLeftArea]("taxi-area_left")
 
-    val redisLocationSink = TaxiAkkaSink[TaxiLocation]//TaxiRedisSink.createTaxiLocationSink(redisSettings)
-    val redisSpeedSink    = TaxiAkkaSink[TaxiSpeed] //TaxiRedisSink.createTaxiSpeedingSink(redisSettings)
-    val redisAvgSpeedSink = TaxiAkkaSink[TaxiSpeed] //TaxiRedisSink.createTaxiSpeedSink(redisSettings)
+    val redisLocationSink = new TaxiAkkaSink[TaxiLocation]//TaxiRedisSink.createTaxiLocationSink(redisSettings)
+    val redisSpeedSink    = new TaxiAkkaSink[TaxiSpeeding]//TaxiRedisSink.createTaxiSpeedingSink(redisSettings)
+    val redisAvgSpeedSink = new TaxiAkkaSink[TaxiSpeed]   //TaxiRedisSink.createTaxiSpeedSink(redisSettings)
 
     val stream = source.keyBy(_.id).mapWithState[TaxiData, TaxiState]{ case (taxi, state) =>
       val prev      = state.getOrElse(TaxiState(taxi))
@@ -64,8 +58,8 @@ object TaxiJob {
       (TaxiData(taxi, distance, speed, avgSpeed), state)
     }
       .processToSink(locationOutput, _.taxi.asLocation, redisLocationSink)
-      .processToSink(avgSpeedOutput, _.asTaxiSpeed, redisSpeedSink)
-      .processToFilteredSink[TaxiSpeed](currentSpeedOutput, _.asTaxiSpeed, _.speed >= 50D, redisAvgSpeedSink)
+      .processToSink(currentSpeedOutput, _.asTaxiSpeeding, redisSpeedSink)
+      .processToFilteredSink[TaxiSpeed](avgSpeedOutput, _.asTaxiSpeed, _.speed >= 50D, redisAvgSpeedSink)
 
 
     stream

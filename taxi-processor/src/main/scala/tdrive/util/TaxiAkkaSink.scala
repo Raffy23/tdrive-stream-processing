@@ -37,6 +37,4 @@ object TaxiAkkaSink {
     ActorPath.fromString("akka.tcp://TaxiWebServer@127.0.0.1:2552/system/receptionist")
   )
 
-  def apply[IN]()(implicit system: ActorSystem): TaxiAkkaSink[IN] = new TaxiAkkaSink[IN]
-
 }
