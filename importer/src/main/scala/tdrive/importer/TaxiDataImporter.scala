@@ -30,7 +30,7 @@ import tdrive.shared.Implicits.RichProperties
 object TaxiDataImporter extends App {
 
   val StandardConfigFile = "config/importer.properties"
-  val inputFilePath      = Try(args(1)).getOrElse(StandardConfigFile)
+  val inputFilePath      = Try(args(0)).getOrElse(StandardConfigFile)
 
   val properties = {
     val prop = new Properties()

@@ -21,7 +21,7 @@ import Utils.RichGzipInputStream
 object KafkaIngestor extends App {
 
   val StandardConfigFile = "config/ingestor.properties"
-  val inputFilePath      = Try(args(1)).getOrElse(StandardConfigFile)
+  val inputFilePath      = Try(args(0)).getOrElse(StandardConfigFile)
 
   val properties = {
     val prop = new Properties()

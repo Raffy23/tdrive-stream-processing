@@ -1,7 +1,7 @@
 package tdrive.util
 
 import org.apache.flink.api.common.functions.AggregateFunction
-import tdrive.dto.TaxiData
+import tdrive.shared.dto.TaxiData
 
 /**
   * Created by 

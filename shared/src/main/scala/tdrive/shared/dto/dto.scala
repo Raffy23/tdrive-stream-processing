@@ -1,4 +1,4 @@
-package tdrive
+package tdrive.shared
 
 import java.time.LocalDateTime
 
@@ -8,7 +8,7 @@ import tdrive.shared.Haversine
   * Created by 
   *
   * @author Raphael Ludwig
-  * @version 31.01.19
+  * @version 02.02.19
   */
 package object dto {
 

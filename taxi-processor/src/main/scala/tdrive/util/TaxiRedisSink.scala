@@ -2,7 +2,7 @@ package tdrive.util
 
 import com.redis.RedisClientPool
 import org.apache.flink.streaming.api.functions.sink.SinkFunction
-import tdrive.dto.{TaxiLocation, TaxiSpeed}
+import tdrive.shared.dto.{TaxiLocation, TaxiSpeed}
 import tdrive.util.TaxiRedisSink.Settings
 
 /**
