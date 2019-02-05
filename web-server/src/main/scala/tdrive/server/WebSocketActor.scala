@@ -1,7 +1,8 @@
 package tdrive.server
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
-import tdrive.server.WebSocketActor.{Command, WsConnected, WsDisconnected}
+import akka.cluster.pubsub.DistributedPubSub
+import tdrive.server.WebSocketActor.{WsConnected, WsDisconnected}
 import tdrive.shared.dto.{TaxiLocation, TaxiSpeed, TaxiSpeeding}
 
 /**
@@ -15,26 +16,39 @@ object WebSocketActor {
   case class WsConnected(actorRef: ActorRef) extends Command
   case object WsDisconnected extends Command
 }
-class WebSocketActor(broadcaster: ActorRef) extends Actor with ActorLogging {
+class WebSocketActor extends Actor with ActorLogging {
+  import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck, Unsubscribe, UnsubscribeAck}
 
+  private val mediator = DistributedPubSub.get(context.system).mediator
   private var wSocket: Option[ActorRef] = None
 
   override def receive: Receive = {
 
-    case cmd: Command => cmd match {
-      case WsConnected(actorRef) =>
-        wSocket = Some(actorRef)
-        broadcaster ! TaxiDataRouter.Register(self)
+    case WsConnected(actorRef) =>
+      wSocket = Some(actorRef)
+      mediator ! Subscribe("taxi-data", self)
 
-      case WsDisconnected =>
-        broadcaster ! TaxiDataRouter.Unregister(self)
-        context.stop(self)
-    }
+    case SubscribeAck(Subscribe("taxi-data", None, `self`)) =>
+      context.become(receiveTaxiData)
 
-    // TODO: to Json or whatever
-    case location: TaxiLocation => wSocket.foreach(_ ! location.toString)
-    case speeding: TaxiSpeeding => wSocket.foreach(_ ! speeding.toString)
-    case speed: TaxiSpeed       => wSocket.foreach(_ ! speed.toString)
+    case UnsubscribeAck(Unsubscribe("taxi-data", None, `self`)) =>
+      wSocket = None
+      context.stop(self)
 
   }
+
+  import io.circe.generic.auto._
+  import io.circe.syntax._
+
+  def receiveTaxiData: Receive = {
+    case location: TaxiLocation => wSocket.foreach(_ ! location.asJson.noSpaces)
+    case speeding: TaxiSpeeding => wSocket.foreach(_ ! speeding.asJson.noSpaces)
+    case speed: TaxiSpeed if speed.speed > 0.0D => wSocket.foreach(_ ! speed.asJson.noSpaces)
+
+    case WsDisconnected =>
+      mediator ! Unsubscribe("taxi-data", self)
+      context.become(receive)
+
+  }
+
 }

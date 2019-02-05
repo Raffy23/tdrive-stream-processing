@@ -4,18 +4,17 @@ import java.time.temporal.ChronoUnit
 import java.util.Properties
 
 import akka.actor.ActorSystem
-import com.typesafe.config.ConfigFactory
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.api.scala._
 import org.apache.flink.streaming.api.functions.ProcessFunction
 import org.apache.flink.streaming.api.scala.{OutputTag, StreamExecutionEnvironment}
 import org.apache.flink.streaming.api.windowing.time.Time
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
+import org.apache.flink.streaming.connectors.kafka.{FlinkKafkaConsumer, FlinkKafkaProducer}
 import org.apache.flink.util.Collector
 import tdrive.Implicits._
 import tdrive.shared.Haversine
 import tdrive.shared.dto._
-import tdrive.util.{TaxiAkkaSink, TaxiDataCounter, TaxiKafkaSchema}
+import tdrive.util.{KafkaSchemas, TaxiDataCounter}
 
 /**
   * Created by 
@@ -33,19 +32,17 @@ object TaxiJob {
     val kafkaProps = new Properties()
     kafkaProps.setProperty("bootstrap.servers", args.get("kafka.server"))
 
-    akkaSystem = ActorSystem("TaxiProcessor", ConfigFactory.parseString("akka.actor.provider=\"akka.remote.RemoteActorRefProvider\""))
-
     val env: StreamExecutionEnvironment = StreamExecutionEnvironment.getExecutionEnvironment
-    val source = env.addSource(new FlinkKafkaConsumer[Taxi]("taxi", TaxiKafkaSchema, kafkaProps))
+    val source = env.addSource(new FlinkKafkaConsumer[Taxi]("taxi", new KafkaSchemas.TaxiKafkaSchema, kafkaProps))
 
     val locationOutput      = OutputTag[TaxiLocation]("taxi-location")
     val currentSpeedOutput  = OutputTag[TaxiSpeeding]("taxi-cur_speed")
     val avgSpeedOutput      = OutputTag[TaxiSpeed]("taxi-avg_speed")
     //val outOfAreaOutput     = OutputTag[TaxiLeftArea]("taxi-area_left")
 
-    val redisLocationSink = new TaxiAkkaSink[TaxiLocation]//TaxiRedisSink.createTaxiLocationSink(redisSettings)
-    val redisSpeedSink    = new TaxiAkkaSink[TaxiSpeeding]//TaxiRedisSink.createTaxiSpeedingSink(redisSettings)
-    val redisAvgSpeedSink = new TaxiAkkaSink[TaxiSpeed]   //TaxiRedisSink.createTaxiSpeedSink(redisSettings)
+    val redisLocationSink = new FlinkKafkaProducer[TaxiLocation]("taxi-locations", new KafkaSchemas.TaxiLocationKafkaSchema, kafkaProps)
+    val redisSpeedSink    = new FlinkKafkaProducer[TaxiSpeeding]("taxi-speeding", new KafkaSchemas.TaxiSpeedingKafkaSchema, kafkaProps)
+    val redisAvgSpeedSink = new FlinkKafkaProducer[TaxiSpeed]("taxi-current-speed", new KafkaSchemas.TaxiSpeedKafkaSchema, kafkaProps)
 
     val stream = source.keyBy(_.id).mapWithState[TaxiData, TaxiState]{ case (taxi, state) =>
       val prev      = state.getOrElse(TaxiState(taxi))

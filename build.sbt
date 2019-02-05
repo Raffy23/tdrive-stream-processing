@@ -8,6 +8,7 @@ scalaVersion := "2.12.8"
 
 val apacheFlinkVersion = "1.7.1"
 val akkaVersion = "2.5.20"
+val circeVersion = "0.10.0"
 
 lazy val taxiProcessor = (project in file("taxi-processor"))
   .settings(
@@ -17,11 +18,6 @@ lazy val taxiProcessor = (project in file("taxi-processor"))
       "org.apache.flink" %% "flink-streaming-scala" % apacheFlinkVersion % "provided",
       "org.apache.flink" %% "flink-connector-kafka" % apacheFlinkVersion,
 
-      "com.typesafe.akka" %% "akka-actor" % akkaVersion,
-      "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
-
-      "org.slf4j" % "slf4j-api" % "1.7.25",
       "ch.qos.logback" % "logback-classic" % "1.2.3",
     ),
 
@@ -57,7 +53,14 @@ lazy val taxiWebServer = (project in file("web-server"))
       "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       "com.typesafe.akka" %% "akka-http" % "10.1.7",
 
+      "com.typesafe.akka" %% "akka-stream-kafka" % "1.0-RC1",
+
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-parser" % circeVersion,
+
       "net.debasishg" %% "redisclient" % "3.9",
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
     )
   )
   .dependsOn(sharedJVM)
