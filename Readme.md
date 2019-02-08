@@ -1,45 +1,74 @@
 TDrive - Taxi data processing
 =============================
-TODO
+A project that does process the [T-Drive trajectory](https://www.microsoft.com/en-us/research/publication/t-drive-trajectory-data-sample/)
+data with different scalable technologies, such as Kafka, Flink, Akka and Cassandra.  
 
-<smaller>*Inspired by the AIC-Project, which used Apache Strom*</smaller>
+```  
+   (Data Source) 
+        |
+        V                                     (Event processing)
++----------------+        +---------+          +--------------+
+|                |        |         +--------->|              |
+| Kafka-Ingestor +------->|  Kafka  |          |    Flink     |
+|                |        |         |<---------+              |
++----------------+        +----+----+          +--------------+
+                               |                       
+                               |
+                               v
+                       +-------+-------+
+         +-------------|               |
+         |             |  Akka Cluster |
+   +-----v------+      |               |
+   |            |      +---------+-----+
+   |  Cassandra |             ^  |
+   |            |             |  | (Server Push over Websocket)
+   +------------+             |  | (Fetch requests for simple queries) 
+   (Data Storage)             |  |
+                              V  v
+                        +--------------+
+                        |              |
+                        |    Web UI    |
+                        |              |
+                        +--------------+
+```
+<small>*Inspired by the AIC-Project, which used Apache Strom instead of Apache Flink and Redis as 
+key-value store between Storm and the Web-Server*</small>
 
 ## Parts
-* **kafka-ingestor:** Puts the data into Kafka, in realtime or faster
-* **taxi-processor:** apache flink job that processes the data
-* **taxi-visualizer:** OpenGL application that can render a dataset into a video with ffmpeg
-* **web-server:** akka server that communicates with the web client over websocket
+* **Importer:** 
+    The importer does transform the data sample into a usable format. Filtering and selecting specific
+    taxis is done in the pre-processing step. The importer reads the configuration from the 
+    `./config/importer.properties` configuration file, or from the file given as the first argument.
+
+* **Kafka-Ingestor:**
+    the Kafka ingestor reads the output file of the Importer and proceeds to push the data into kafka.
+    The Ingestor can be configured to either simulate real-time data or speed up or slow down the rate
+    at which data is pushed to kafka. The kafka ingestor reads the configuration from the 
+    `./config/ingestor.properties` configuration file, or from the file given as the first argument.
+    
+* **Taxi-Processor:** 
+    A Apache Flink job, which is in charge of computing average and current speed and other notifications.
+    After processing the data is emitted into different kafka topics, which are read by the akka cluster 
+    (web-server). The Job is configured with the `--kafka` command line parameter.
+     
+* **web-server:** 
+    A Akka Cluster that does connect to kafka and provides the data to a user interface over websocket.
+    Besides handing the events from kafka to the client the events are also stored into cassandra where
+    the client can retrieve data not recieved by the current event stream, e.g. old data. The server
+    can be configured by the `application.conf` and `kafka.conf` files.
+        
 * **web-client:** ScalaJs client that displays the taxis on a map
+* **taxi-visualizer:** OpenGL application that can render a dataset into a video with ffmpeg
 
-### Importer 
-The importer does transform the [T-Drive trajectory](https://www.microsoft.com/en-us/research/publication/t-drive-trajectory-data-sample/)
-data sample into a usable format. Additionally filtering and dataset reducing is also implemented. 
-The importer should transform the data as pre-processing step since the T-Drive data sample can't easily
-transformed at is current state.
-
-The importer reads the configuration from the `./config/importer.properties` configuration file, or
-from the file given as the first argument.
-
-### Kafka Ingestor
-The Kafka ingestor does read the output file of the *importer* and does write the data to Kafka. 
-A sleep timeout can be configured, ranging from 1 (for realtime) to 0 (as fast as possible).
-
-The kafka ingestor reads the configuration from the `./config/ingestor.properties` configuration file
-, or from the file given as the first argument.
-
-### Taxi Processor
-A Apache Flink job, which is in charge of computing average and current speed and other notifications.
-After processing the data is emitted to redis for storage where the web-server can retrieve it send it
-to the web-client.
-
-TODO: run, commit to Manager, ... 
 
 ## Configuration
 TODO
 
 ## Dependencies
 * Kafka
-* Redis (?)
+
+## Docker
+TODO
 
 ## HowTo
 ### Build
