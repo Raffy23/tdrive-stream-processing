@@ -54,7 +54,6 @@ object WebServer extends App {
               .actorRef(64, OverflowStrategy.dropHead)
               .map( (json: String) => TextMessage.Strict(json) )
               .mapMaterializedValue{actorRef =>
-                println("1")
                 eventActor ! WsConnected(actorRef)
                 NotUsed
               }

@@ -96,6 +96,6 @@ lazy val taxiVisualizer = (project in file("taxi-visualizer"))
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
     )
-  )
+  ).dependsOn(sharedJVM)
 
 lazy val sharedJVM = project in file("shared")

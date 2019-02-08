@@ -49,7 +49,7 @@ key-value store between Storm and the Web-Server*</small>
 * **Taxi-Processor:** 
     A Apache Flink job, which is in charge of computing average and current speed and other notifications.
     After processing the data is emitted into different kafka topics, which are read by the akka cluster 
-    (web-server). The Job is configured with the `--kafka` command line parameter.
+    (web-server). The Job is configured with the `--kafka.server` command line parameter.
      
 * **web-server:** 
     A Akka Cluster that does connect to kafka and provides the data to a user interface over websocket.
@@ -66,10 +66,11 @@ TODO
 
 ## Dependencies
 * Kafka
+* Flink Job Manager *(optional)*
 
 ## Docker
 TODO
 
 ## HowTo
-### Build
-### Run
+* Build (TODO)
+* Run (TODO)
