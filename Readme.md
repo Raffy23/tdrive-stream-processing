@@ -4,26 +4,35 @@ A project that does process the [T-Drive trajectory](https://www.microsoft.com/e
 data with different scalable technologies, such as Kafka, Flink, Akka and Cassandra.  
 
 ```  
-   (Data Source) 
+(T-Drive sample data)
+        | 
+  +------------+
+  |            |
+  |  Importer  |
+  |            |
+  +-----+------+
         |
-        V                                     (Event processing)
-+----------------+        +---------+          +--------------+
-|                |        |         +--------->|              |
-| Kafka-Ingestor +------->|  Kafka  |          |    Flink     |
-|                |        |         |<---------+              |
-+----------------+        +----+----+          +--------------+
-                               |                       
-                               |
-                               v
-                       +-------+-------+
-         +-------------|               |
-         |             |  Akka Cluster |
-   +-----v-------+     |               |
-   |             |     +---------+-----+
+        v                     
+   (Data Source) ---------------------------------------------------------------+
+        |                                                                       |
+        v                                     (Event processing)                |
++----------------+        +---------+          +--------------+                 v
+|                |        |         +--------->|              |           +------------+
+| Kafka-Ingestor +------->|  Kafka  |          |    Flink     |           |            |
+|                |        |         |<---------+              |           | Visualizer |
++----------------+        +----+----+          +--------------+           |            |
+                               |                                          +-----+------+
+                               |                                                | 
+                               v                                                v
+                       +-------+--------+                                 (Video output)
+         +-------------|                |
+         |             |  Akka Cluster  |
+   +-----v-------+     |                |
+   |             |     +---------+------+
    |  Cassandra  |            ^  |
    |             |            |  | (Server Push over Websocket)
    +-------------+            |  | (Fetch requests for simple queries) 
-   (Data Storage)             |  |
+   (Data  Storage)            |  |
                               v  v
                         +--------------+
                         |              |
