@@ -7,6 +7,7 @@ import java.nio.ByteBuffer
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{LocalDateTime, ZoneId}
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
 import java.util.zip.GZIPInputStream
@@ -45,7 +46,7 @@ object TaxiDataVideoRenderer  extends App {
   val SRC_HEIGHT = AppConfig.conf.videoHeight
   val whitelist = AppConfig.conf.whitelist.toSet
 
-  println(s"Parsing data from ${AppConfig.conf.inputFile} ...")
+  println(s"Parsing data from ${AppConfig.conf.inputFile}.gz ...")
   case class Taxi(id: Int, time: Long, long: Float, lat: Float)
   val taxiData = {
     //val defaultZone: ZoneId = TimeZone.getDefault.toZoneId
@@ -53,7 +54,7 @@ object TaxiDataVideoRenderer  extends App {
       java.lang.Short.BYTES + java.lang.Integer.BYTES + java.lang.Float.BYTES * 2
     }
 
-    val in = new GZIPInputStream(new FileInputStream(AppConfig.conf.inputFile), 1024 * 8)
+    val in = new GZIPInputStream(new FileInputStream(AppConfig.conf.inputFile + ".gz"), 1024 * 8)
     val inBuffer = Array.fill[Byte](taxiDataSize)(0x0)
 
     val out = Stream
@@ -183,9 +184,14 @@ object TaxiDataVideoRenderer  extends App {
 
   glClearColor(0.16f, 0.16f, 0.16f, 1)
 
+  val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
   val defaultZone = ZoneId.systemDefault()
-  val start = LocalDateTime.parse("2008-02-02T13:30:45", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-  val end = LocalDateTime.parse("2008-02-08T17:39:19", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+  val metaData = new Properties()
+  metaData.load(new FileInputStream(AppConfig.conf.inputFile + ".properties"))
+
+  val start = LocalDateTime.parse(metaData.getProperty("start_time"), dateFmt)
+  val end = LocalDateTime.parse(metaData.getProperty("end_time"), dateFmt)
   var current = start
 
   shader.use()
