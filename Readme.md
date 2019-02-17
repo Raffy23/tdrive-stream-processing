@@ -38,7 +38,7 @@ key-value store between Storm and the Web-Server*</small>
 * **Importer:** 
     The importer does transform the data sample into a usable format. Filtering and selecting specific
     taxis is done in the pre-processing step. The importer reads the configuration from the 
-    `./config/importer.properties` configuration file, or from the file given as the first argument.
+    `./config/importer.conf` configuration file, or from the file given as the first argument.
 
 * **Kafka-Ingestor:**
     the Kafka ingestor reads the output file of the Importer and proceeds to push the data into kafka.
@@ -57,8 +57,14 @@ key-value store between Storm and the Web-Server*</small>
     the client can retrieve data not recieved by the current event stream, e.g. old data. The server
     can be configured by the `application.conf` and `kafka.conf` files.
         
-* **web-client:** ScalaJs client that displays the taxis on a map
-* **taxi-visualizer:** OpenGL application that can render a dataset into a video with ffmpeg
+* **web-client:** 
+    *Planned*, A ScalaJS Client that shows taxi movements on a map as they are ommited by the websocket 
+
+* **taxi-visualizer:** 
+    A OpenGL renderer that creates videos of the taxi movement with the help of ffmpeg. The renderer
+    uses the output file of the importer as data source for the video. The renderer can be configured
+    with the `./config/importer.conf` configuration file. Before it can be used make sure the path
+    to ffmpeg is set correctly.
 
 
 ## Configuration
