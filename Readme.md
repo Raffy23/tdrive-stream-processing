@@ -18,13 +18,13 @@ data with different scalable technologies, such as Kafka, Flink, Akka and Cassan
                        +-------+-------+
          +-------------|               |
          |             |  Akka Cluster |
-   +-----v------+      |               |
-   |            |      +---------+-----+
-   |  Cassandra |             ^  |
-   |            |             |  | (Server Push over Websocket)
-   +------------+             |  | (Fetch requests for simple queries) 
+   +-----v-------+     |               |
+   |             |     +---------+-----+
+   |  Cassandra  |            ^  |
+   |             |            |  | (Server Push over Websocket)
+   +-------------+            |  | (Fetch requests for simple queries) 
    (Data Storage)             |  |
-                              V  v
+                              v  v
                         +--------------+
                         |              |
                         |    Web UI    |
@@ -66,13 +66,21 @@ key-value store between Storm and the Web-Server*</small>
     with the `./config/importer.conf` configuration file. Before it can be used make sure the path
     to ffmpeg is set correctly.
 
+## TODO
+* Documentation
+* Cassandra integration
+* Implement web-client
+* Optimize taxi-visualizer
+* Docker files & docker-compose
 
 ## Configuration
 TODO
 
-## Dependencies
+## Runtime Dependencies
 * Kafka
+* Cassandra
 * Flink Job Manager *(optional)*
+  * Taxi-Processor can also be started as standalone from sbt and IntelliJ 
 
 ## Docker
 TODO
