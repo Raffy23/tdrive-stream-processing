@@ -37,12 +37,14 @@ lazy val taxiProcessor = (project in file("taxi-processor"))
   .dependsOn(sharedJVM)
 
 lazy val taxiDataImporter = (project in file("importer"))
-  .dependsOn(sharedJVM)
+  .settings(
+    libraryDependencies += "com.github.pureconfig" %% "pureconfig" % "0.10.2"
+  ).dependsOn(sharedJVM)
 
 lazy val kafkaIngestor = (project in file("kafka-ingestor"))
   .settings(
     libraryDependencies += "org.apache.kafka" %% "kafka" % "2.1.0"
-  )
+  ).dependsOn(sharedJVM)
 
 lazy val taxiWebServer = (project in file("web-server"))
   .settings(
@@ -91,7 +93,7 @@ lazy val taxiVisualizer = (project in file("taxi-visualizer"))
 
       "org.joml" % "joml" % jomlVersion,
 
-      //"com.github.hoary" % "JavaAV-Project" % "1.0",
+      "com.github.pureconfig" %% "pureconfig" % "0.10.2",
 
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",

@@ -76,6 +76,20 @@ object Shader extends LazyLogging {
 
   protected case class SourceProperties(file: Boolean, vertex: String, fragment: String, geometry: String, compute: String)
 
+  def fromResource(name: String, vertex: String, fragment: String, geometry: String = null)(implicit stack: MemoryStack): Shader = {
+    val vSource = Source.fromResource(vertex).getLines().mkString("\n")
+    val fSource = Source.fromResource(fragment).getLines().mkString("\n")
+    val gSource = if (geometry != null) Source.fromResource(geometry).getLines().mkString("\n") else null
+
+    val vShader = compileShader(vSource, GL_VERTEX_SHADER)
+    val fShader = compileShader(fSource, GL_FRAGMENT_SHADER)
+    val gShader = compileShader(gSource, GL_GEOMETRY_SHADER)
+
+    val program = linkProgram(List(vShader, fShader, gShader))
+
+    new Shader(name, program, SourceProperties(file = true, vertex, fragment, geometry, null))
+  }
+
   def fromFile(name: String, vertex: String, fragment: String, geometry: String = null)(implicit stack: MemoryStack): Shader = {
     val vSource = Source.fromFile(vertex).getLines().mkString("\n")
     val fSource = Source.fromFile(fragment).getLines().mkString("\n")

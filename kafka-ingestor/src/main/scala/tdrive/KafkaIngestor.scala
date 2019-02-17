@@ -10,7 +10,7 @@ import java.util.zip.GZIPInputStream
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 
 import scala.util.Try
-import Utils.RichGzipInputStream
+import tdrive.shared.Implicits.RichGzipInputStream
 
 /**
   * Created by 

@@ -29,35 +29,25 @@ import tdrive.shared.Implicits.RichProperties
   */
 object TaxiDataImporter extends App {
 
-  val StandardConfigFile = "config/importer.properties"
-  val inputFilePath      = Try(args(0)).getOrElse(StandardConfigFile)
-
-  val properties = {
-    val prop = new Properties()
-    val configReader = new FileReader(new File(inputFilePath))
-    prop.load(configReader)
-
-    prop
-  }
+  val StandardConfigFile = "config/importer.conf"
+  val config = AppConfig.conf(args, StandardConfigFile)
 
   val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
   val TaxiDataPattern = "(\\d+),([^,]+),([^,]+),([^,]+)".r
   val BeijingLat  = 39.904211
   val BeijingLong = 116.407395
 
-  val zis = new ZipFile(properties.getFilePath("importer.input"))
-  val filterFarAwayTaxis = properties.getProperty("importer.filter-taxis").toBoolean
-  val filterRadius = properties.getProperty("importer.filter-radius", "0.0").toDouble
+  val zis = new ZipFile(config.inputFile)
+  val filterFarAwayTaxis = config.filterTaxis
+  val filterRadius = config.filterRadius
+  val whitelist = config.whitelist.toSet
 
   val defaultZone = ZoneId.systemDefault()
-  val distanceMap = new TrieMap[Int, Double]()
-  //val whitelist = List(2560, 8179, 366, 8717, 534, 4798, 1277, 5860, 8662, 9415, 6665, 2669, 9946,
-  //  9945, 9944, 750, 2884, 6464, 4177, 3961, 9468, 9579, 9949, 5071, 8696, 10287, 28, 9109, 7971,
-  //  9537, 8568, 9138, 9548, 8094, 10011, 4363, 3572, 10012, 3899, 6068, 315, 6876, 1336, 1622, 1359,
-  //  9905, 618, 1574, 3365, 8594) // 50 taxis sorted by total km in 50 km radius
 
+  val imported = if (whitelist.isEmpty) IOUtil.readTaxis(zis)
+                 else IOUtil.readTaxis(zis).filter(whitelist contains _._1)
 
-  val converted = IOUtil.readTaxis(zis).map{ case (taxiID, zipEntry) => Future {
+  val converted = imported.map{ case (taxiID, zipEntry) => Future {
     val in = Source.fromInputStream(zis.getInputStream(zipEntry)).getLines().toStream.map {
       case TaxiDataPattern(_, date, long, lat) => TaxiEntry(LocalDateTime.parse(date, dateFmt), long.toDouble, lat.toDouble)
     }
@@ -78,7 +68,7 @@ object TaxiDataImporter extends App {
 
         val goodEntry = speed <= 120 && !tooFarAway
         if (goodEntry) {
-          distanceMap(taxiID) = distanceMap.getOrElse(taxiID, 0D) + distance
+          //distanceMap(taxiID) = distanceMap.getOrElse(taxiID, 0D) + distance
           currentEntry = e
         }
 
@@ -90,7 +80,7 @@ object TaxiDataImporter extends App {
     }
   }}
 
-  val outputStream = new FileOutputStream(properties.getFilePath("importer.output") + ".gz")
+  val outputStream = new FileOutputStream(config.outputFile + ".gz")
   val gzipOutputStream = new GZIPOutputStream(outputStream)
   val out = new DataOutputStream(gzipOutputStream)
 
@@ -121,7 +111,7 @@ object TaxiDataImporter extends App {
   out.close()
 
   println(s"Wrote ${sorted.size} data points")
-  val metaOut = new FileWriter(new File(properties.getFilePath("importer.output") + ".properties"))
+  val metaOut = new FileWriter(new File(config.outputFile + ".properties"))
   //metaOut.write(
   //  s"""
   //     | {

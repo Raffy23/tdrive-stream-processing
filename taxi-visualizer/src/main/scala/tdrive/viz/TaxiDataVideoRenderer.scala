@@ -2,17 +2,17 @@ package tdrive.viz
 
 import java.awt.Color
 import java.awt.image.{BufferedImage, DataBufferByte}
-import java.io.{BufferedReader, InputStreamReader}
-import java.text.SimpleDateFormat
+import java.io.{BufferedReader, FileInputStream, InputStreamReader}
+import java.nio.ByteBuffer
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{LocalDateTime, ZoneId}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
-import java.util.zip.ZipFile
+import java.util.zip.GZIPInputStream
 
 import javax.imageio.ImageIO
-import org.joml.{Matrix4f, Vector2f}
+import org.joml.Matrix4f
 import org.lwjgl.BufferUtils
 import org.lwjgl.glfw.GLFW.{glfwPollEvents, glfwTerminate}
 import org.lwjgl.opengl.GL11._
@@ -23,15 +23,13 @@ import org.lwjgl.opengl.GL30._
 import org.lwjgl.opengl.GL32._
 import org.lwjgl.opengl.GL42._
 import org.lwjgl.opengl.GL43._
-import tdrive.shared.Haversine
+import tdrive.shared.Implicits.RichGzipInputStream
 import tdrive.viz.gl.VertexArrayObject
-import tdrive.viz.util.{IOUtils, _}
+import tdrive.viz.util._
 
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
-import scala.io.Source
 
 /**
   * Created by 
@@ -41,127 +39,66 @@ import scala.io.Source
   */
 object TaxiDataVideoRenderer  extends App {
 
-  val SRC_WIDTH  = 1920
-  val SRC_HEIGHT = 1080
+  val phi = (1 + math.sqrt(5D)) / 2
 
-  val TaxiDataPattern = "(\\d+),([^,]+),([^,]+),([^,]+)".r
-  val zis = new ZipFile("./T-drive Taxi Trajectories.zip")
+  val SRC_WIDTH  = AppConfig.conf.videoWidth
+  val SRC_HEIGHT = AppConfig.conf.videoHeight
+  val whitelist = AppConfig.conf.whitelist.toSet
 
-
-  //val whitelist = List(
-  //  8554, 313, 9859, 258, 8276, 3975, 10173, 8717, 259, 9250, 9181, 9578, 318, 2342, 9949, 3617,
-  //  8766, 5968, 6221, 1172, 8692, 6612, 1563, 4635, 901, 8603, 7149, 2154, 4347, 2655, 2796, 5638,
-  //  6335, 7597, 116, 2750, 3473, 4091, 5970, 1332, 3234, 1631, 5125, 3658, 2728, 5063, 3983, 5303,
-  //  10113, 2293, 5238, 5450, 152, 2839, 1176, 3857, 9725, 9151, 3713, 9385, 3980, 3659, 4167, 4138,
-  //  808, 2435, 8557, 2587, 9937, 8326, 8553, 4819, 9644, 3671, 7002, 658, 1353, 751, 2294, 1338,
-  //  5719, 7709, 3107, 2586, 304, 9724, 6876, 2283, 9152, 4232, 5515, 9556, 7610, 3848, 9766, 9863,
-  //  1033, 9032, 3163, 4620
-  //)
-
-  val whitelist = List(8554,313,258,8276,3975,10173,8717,259,9250,9181,9578,318,2342,9949,3617,
-    8766,5968,6221,1172,8692,6612,1563,4635,901,8603,7149,2154,4347,2655,2796,6335,7597,116,
-    2750,3473,4091,5970,3234,3658,2728,5063,3983,5303,10113,5450,152,3857,9151,3713,3980,8557,
-    2587,9937,8553,4819,9644,3671,7002,658,1353
-  )
-
-  //val whitelist = List(2560, 8179, 366, 8717, 534, 4798, 1277, 5860, 8662, 9415, 6665, 2669, 9946,
-  //  9945, 9944, 750, 2884, 6464, 4177, 3961, 9468, 9579, 9949, 5071, 8696, 10287, 28, 9109, 7971,
-  //  9537, 8568, 9138, 9548, 8094, 10011, 4363, 3572, 10012, 3899, 6068, 315, 6876, 1336, 1622, 1359,
-  //  9905, 618, 1574, 3365, 8594) // 50 taxis sorted by total km in 50 km radius
-
-  var minLong = Double.MaxValue
-  var maxLong = Double.MinValue
-  var minLat  = Double.MaxValue
-  var maxLat  = Double.MinValue
-
-  // TODO: Rewrite to importer file / kafka source
-  val taxiDrivenKM = new TrieMap[Int, Double]()
-  val inputTmp = IOUtils
-    .readTaxis(zis)
-    .filter(whitelist contains _._1)
-    .map{ case (taxiID, zipEntry) =>
-      (
-        taxiID,
-        Future {
-          val dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-
-          val source = Source
-            .fromInputStream(zis.getInputStream(zipEntry))
-            .getLines()
-            .toStream
-            .map { case TaxiDataPattern(_, date, long, lat) =>
-              ((dateFmt.parse(date).getTime / 1000).toInt, long.toFloat, lat.toFloat)
-            }
-
-          if (source.nonEmpty) {
-            var current = source.head
-
-            source.drop(1).filter{ case e @ (timestamp, long, lat) =>
-              val deltaS = timestamp - current._1
-              val distance = Haversine.haversine(lat, long, current._3, current._2)
-              val speed = distance / deltaS * 3600
-
-              val corrupt = lat == 0D && long == 0D
-              val same = current._2 == long && current._3 == lat
-              val tooFarAway = Haversine.haversine(lat, long,39.904211, 116.407395) > 15
-
-              val goodEntry = speed <= 100 && !tooFarAway
-              if (goodEntry) {
-                taxiDrivenKM(taxiID) = taxiDrivenKM.getOrElse(taxiID, 0D) + distance
-                //println(distance)
-                //println(speed)
-                current = e
-              }
-
-              goodEntry && !same && !corrupt
-            }.map {
-              case (date, long, lat) =>
-                val tLong = long.toDouble
-                val tLat  = lat.toDouble
-
-                minLong = math.min(minLong, tLong)
-                maxLong = math.max(maxLong, tLong)
-                minLat  = math.min(minLat , tLat )
-                maxLat  = math.max(maxLat , tLat )
-
-                (date.toInt, tLong, tLat)
-            }.toList
-          } else {
-            List.empty
-          }
-
-        }
-      )
-    }.map{ case (taxiID, data) =>
-    def normalize(x: Double, min: Double, max: Double): Double = (x - min) / (max - min)
-    def normLat(x: Double): Double  = normalize(x, minLat, maxLat) * SRC_HEIGHT
-    def normLong(x: Double): Double = normalize(x, minLong, maxLong) * SRC_WIDTH
-
-    data.map { data =>
-      (
-        taxiID,
-        data.map(_._1),
-        {
-          val nativeBuffer = BufferUtils.createFloatBuffer(data.size * 2)
-          data.foreach { case (_, long, lat) =>
-            nativeBuffer.put(normLong(long).toFloat)
-            nativeBuffer.put(normLat(lat).toFloat)
-          }
-
-          nativeBuffer
-        }
-      )
+  println(s"Parsing data from ${AppConfig.conf.inputFile} ...")
+  case class Taxi(id: Int, time: Long, long: Float, lat: Float)
+  val taxiData = {
+    //val defaultZone: ZoneId = TimeZone.getDefault.toZoneId
+    val taxiDataSize = {
+      java.lang.Short.BYTES + java.lang.Integer.BYTES + java.lang.Float.BYTES * 2
     }
-  }.toList
 
-  val taxiData = Await.result(Future.sequence(inputTmp), 1 hour)
-  //val filtered = taxiDrivenKM.toList.sortBy(-_._2).take(50).map(_._1)
-  //println(taxiDrivenKM.toList.sortBy(-_._2).take(50).map(_._1))
+    val in = new GZIPInputStream(new FileInputStream(AppConfig.conf.inputFile), 1024 * 8)
+    val inBuffer = Array.fill[Byte](taxiDataSize)(0x0)
 
-  zis.close()
+    val out = Stream
+      .continually(in.readFully(inBuffer))
+      .takeWhile(_ == taxiDataSize)
+      .map { _ =>
+        val buffer = ByteBuffer.wrap(inBuffer)
+        Taxi(
+          buffer.getShort,
+          buffer.getInt.toLong,
+          buffer.getFloat,
+          buffer.getFloat
+        )
+      }.toVector
 
-  val framePosition = Array.fill[Int](10358/*taxiData.size*/)(0)
-  val pframePosition = Array.fill[Int](10358/*taxiData.size*/)(0)
+    in.close()
+
+    if (whitelist.nonEmpty) out.filter(whitelist contains _.id)
+    else out
+  }
+
+  val minLong = taxiData.map(_.long).min
+  val maxLong = taxiData.map(_.long).max
+  val minLat  = taxiData.map(_.lat).min
+  val maxLat  = taxiData.map(_.lat).max
+
+  println("Creating native Buffer for OpenGL ...")
+  val nativeBuffer = BufferUtils.createFloatBuffer(taxiData.size * (4 /*rgba*/ + 2 /*lat,long*/))
+  taxiData.foreach { taxi =>
+    @inline def normalize(x: Double, min: Double, max: Double): Double = (x - min) / (max - min)
+    @inline def normLat(x: Double): Double  = normalize(x, minLat, maxLat) * SRC_HEIGHT
+    @inline def normLong(x: Double): Double = normalize(x, minLong, maxLong) * SRC_WIDTH
+
+    val hue = taxi.id * phi - (taxi.id * phi).floor
+    val color = Color.getHSBColor(hue.toFloat, 1.0F, 1.0F)
+
+    nativeBuffer.put(color.getRed / 255F)
+    nativeBuffer.put(color.getGreen / 255F)
+    nativeBuffer.put(color.getBlue / 255F)
+    nativeBuffer.put(0F)
+
+    nativeBuffer.put(normLong(taxi.long).toFloat)
+    nativeBuffer.put(normLat(taxi.lat).toFloat)
+  }
+  nativeBuffer.flip()
 
   val quadSize = 2
   val vertices = Array(
@@ -192,9 +129,7 @@ object TaxiDataVideoRenderer  extends App {
     -1, 1, 0, 1
   )
 
-  val window = new Window("Hello World!", 800, 640, mode = 0, resizeable = false, debug = debugFlag)
-
-  // Upload Buffers as SSBO
+  val window = new Window("TaxiVisualizer", SRC_WIDTH, SRC_HEIGHT, mode = 0, resizeable = false, debug = debugFlag)
 
   val VAO = VertexArrayObject.create()
   val PlaneVBO = glGenBuffers()
@@ -206,23 +141,9 @@ object TaxiDataVideoRenderer  extends App {
     VAO.attribute(0, 3, GL_FLOAT, normalized = false, 3 * sizeof(`float`), 0)
   }
 
-  val phi = (1 + math.sqrt(5D)) / 2
-
-  val ColorVBO = glGenBuffers()
-  val colorNativeBuffer = BufferUtils.createFloatBuffer(10358*4)
-  (0 to 10357).foreach{ id =>
-    val hue = id*phi - (id * phi).floor
-    val color = Color.getHSBColor(hue.toFloat, 1.0F, 1.0F)
-
-    colorNativeBuffer.put(color.getRed/255F)
-    colorNativeBuffer.put(color.getGreen/255F)
-    colorNativeBuffer.put(color.getBlue/255F)
-    colorNativeBuffer.put(1F)
-  }
-
-  colorNativeBuffer.flip()
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ColorVBO)
-  glBufferData(GL_SHADER_STORAGE_BUFFER, colorNativeBuffer, GL_STATIC_DRAW)
+  val taxiDataVBO = glGenBuffers()
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, taxiDataVBO)
+  glBufferData(GL_SHADER_STORAGE_BUFFER, nativeBuffer, GL_STATIC_DRAW)
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0)
 
   def createFBO(): (Int, Int) = {
@@ -253,41 +174,8 @@ object TaxiDataVideoRenderer  extends App {
   }
 
   val shader = memory(implicit stack => {
-    Shader.fromFile("triangle", "./resources/shader/taxi-cpu.vert", "./resources/shader/taxi-cpu.frag")
+    Shader.fromResource("triangle", "shader/taxi-cpu.vert", "shader/taxi-cpu.frag")
   })
-
-
-  val taxiBuffers = taxiData.filter(_._2.nonEmpty).map{ case (id, times, nativeBuffer) =>
-    (
-      id,
-      times,
-      nativeBuffer,
-      {
-        val VAO = VertexArrayObject.create()
-        val VBO = glGenBuffers()
-
-        nativeBuffer.flip()
-
-        VAO.bind{VAO =>
-          glBindBuffer(GL_ARRAY_BUFFER, PlaneVBO)
-          VAO.attribute(0, 3, GL_FLOAT, normalized = false, 3 * sizeof(`float`), 0)
-          VAO.attributeDivisor(0, 0)
-          glBindBuffer(GL_ARRAY_BUFFER, 0)
-
-          glBindBuffer(GL_SHADER_STORAGE_BUFFER, VBO)
-          glBufferData(GL_SHADER_STORAGE_BUFFER, nativeBuffer, GL_STATIC_DRAW)
-          glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, VBO)
-          glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0)
-        }
-
-        (VAO, VBO)
-      }
-    )
-  }
-
-  if (glGetError() != GL_NO_ERROR) {
-    System.err.println("Some error while uploading buffers")
-  }
 
   if (debugFlag) window.show()
   window.setVsync(false)
@@ -298,10 +186,7 @@ object TaxiDataVideoRenderer  extends App {
   val defaultZone = ZoneId.systemDefault()
   val start = LocalDateTime.parse("2008-02-02T13:30:45", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
   val end = LocalDateTime.parse("2008-02-08T17:39:19", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-
   var current = start
-
-  val position = new Vector2f(40f,105f)
 
   shader.use()
   shader.setUniform("projection", ortho)
@@ -311,14 +196,11 @@ object TaxiDataVideoRenderer  extends App {
   var last = System.currentTimeMillis()
   var frames = 0
 
-  val shader_ColorID = shader.getUniformLocation("colorID")
-  val shader_Base    = shader.getUniformLocation("base")
-
   val screenBuffer = BufferUtils.createByteBuffer(SRC_HEIGHT * SRC_WIDTH * 3)
 
   ImageIO.setUseCache(false)
   val ffmpegBuilder = new ProcessBuilder(
-    "ffmpeg", //"I:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    AppConfig.conf.ffmpegBinary,
     "-y",
     "-threads", "7",
     "-f", "image2pipe",
@@ -327,12 +209,13 @@ object TaxiDataVideoRenderer  extends App {
     "-framerate", "60",
     "-i", "-",
     "-c:v", "libx264",
-    //"-preset", "veryslow",
-    "./taxi_sortBy_count_distance_limit_50.mkv"
+    "-preset", "veryslow",
+   AppConfig.conf.videoOutput
   )
 
   ffmpegBuilder.redirectErrorStream(true)
 
+  println("Starting ffmpeg ...")
   val ffmpeg = ffmpegBuilder.start()
   val imgOut = ffmpeg.getOutputStream
 
@@ -373,10 +256,10 @@ object TaxiDataVideoRenderer  extends App {
   }
 
 
-
   var imgPosition = 0
-  val taxisToRender = taxiBuffers//.filter(filtered contains _._1)
-  println(s"Rendering: ${taxisToRender.size} taxis")
+  var prevPos  = 0
+  var prevBase = 0
+  println(s"Rendering: ${taxiData.size} entries")
 
   while (current.isBefore(end) && !window.isClosed) {
     val prev = current.minus(90, ChronoUnit.MINUTES).atZone(defaultZone).toEpochSecond
@@ -388,40 +271,21 @@ object TaxiDataVideoRenderer  extends App {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     val currentS = current.atZone(defaultZone).toEpochSecond
-    val async = taxisToRender.map{ case (id, times, _, x) => Future {
-      var pos = times.indexWhere(_ > currentS, framePosition(id-1))
-      pos = if (pos == -1) times.size - 1 else pos
-      framePosition(id-1) = pos
+    var pos      = taxiData.indexWhere(_.time > currentS, prevPos)
+    var base     = taxiData.indexWhere(_.time > prev, prevBase)
 
-      val tBase = times.indexWhere(_ > prev, pframePosition(id-1))
-      pframePosition(id-1) = math.max(0, tBase)
+    pos = if (pos == -1) taxiData.size - 1 else pos
+    base = if (base == -1) pos else base
 
-      val base = if (tBase == -1) pos else tBase
+    prevPos = pos
+    prevBase = math.max(0, base)
 
-      (id, pos, base, x)
-    }}
-
-    Await.result(Future.sequence(async), 1 minute).foreach{ case (id, pos, base, (vao, ssbo)) =>
-      //println(pos-base)
-
-      if (pos-base > 0)
-        vao.bind { _ =>
-          shader.setUniform(shader_ColorID, id.toInt - 1)
-          shader.setUniform(shader_Base, (pos-base).toInt)
-
-          glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo)
-          glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ColorVBO)
-
-          glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 6, pos-base, base)
-        }
-
-      //(math.max(0, pos - 20) to math.min(pos, times.size-1)).foreach{ pos =>
-      //  shader.setUniform("position", position.set(nativeBuffer.get(pos*2),nativeBuffer.get(pos*2+1)))
-      //  VAO.bind{_ =>
-      //    glDrawArrays(GL_TRIANGLES, 0, 6)
-      //  }
-      //}
-    }
+    if (pos-base > 0)
+      VAO.bind { _ =>
+        //shader.setUniform(shader_Base, pos-base)
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, taxiDataVBO)
+        glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 6, pos-base, base)
+      }
 
     readBack(currentFBO) = true
     if (readBack((currentFBO+1)%readBack.length)) {
@@ -469,8 +333,10 @@ object TaxiDataVideoRenderer  extends App {
     }
   }
 
+  println("Waiting for encoder to finish ...")
   Await.result(backgroundTask, 1 hour)
 
+  println("Cleaning up ...")
   window.close()
   window.destroy()
   glfwTerminate()

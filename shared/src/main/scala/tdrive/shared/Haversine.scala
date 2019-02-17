@@ -1,10 +1,7 @@
 package tdrive.shared
 
 /**
-  * Created by 
-  *
-  * @author Raphael Ludwig
-  * @version 31.01.19
+  * From https://rosettacode.org/wiki/Haversine_formula
   */
 object Haversine {
   import math._
