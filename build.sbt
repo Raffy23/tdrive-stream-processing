@@ -68,6 +68,10 @@ lazy val taxiWebServer = (project in file("web-server"))
   .dependsOn(sharedJVM)
 
 lazy val taxiWebClient = (project in file("web-client"))
+  .settings(
+    scalaJSUseMainModuleInitializer := true,
+    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.9.6"
+  ).enablePlugins(ScalaJSPlugin)
 
 val lwjglVersion = "3.2.1"
 val jomlVersion = "1.9.12"
