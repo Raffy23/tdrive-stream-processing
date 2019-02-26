@@ -26,6 +26,4 @@ object Utils {
       )
     )
 
-  implicit def convertTupleToArray(x: (Double, Double)): js.Array[Double] = L.latLng(x._1, x._2)
-
 }

@@ -3,7 +3,7 @@ package tdrive.server
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import akka.cluster.pubsub.DistributedPubSub
 import tdrive.server.WebSocketActor.{WsConnected, WsDisconnected}
-import tdrive.shared.dto.{TaxiLocation, TaxiSpeed, TaxiSpeeding}
+import tdrive.shared.dto.{TaxiLocation, TaxiMessage, TaxiSpeed, TaxiSpeeding}
 
 /**
   * Created by 
@@ -41,9 +41,9 @@ class WebSocketActor extends Actor with ActorLogging {
   import io.circe.syntax._
 
   def receiveTaxiData: Receive = {
-    case location: TaxiLocation => wSocket.foreach(_ ! location.asJson.noSpaces)
-    case speeding: TaxiSpeeding => wSocket.foreach(_ ! speeding.asJson.noSpaces)
-    case speed: TaxiSpeed if speed.speed > 0.0D => wSocket.foreach(_ ! speed.asJson.noSpaces)
+    case location: TaxiLocation => wSocket.foreach(_ ! location.asInstanceOf[TaxiMessage].asJson.noSpaces)
+    case speeding: TaxiSpeeding => wSocket.foreach(_ ! speeding.asInstanceOf[TaxiMessage].asJson.noSpaces)
+    case speed: TaxiSpeed if speed.speed > 0.0D => wSocket.foreach(_ ! speed.asInstanceOf[TaxiMessage].asJson.noSpaces)
 
     case WsDisconnected =>
       mediator ! Unsubscribe("taxi-data", self)

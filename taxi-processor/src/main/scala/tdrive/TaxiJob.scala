@@ -12,7 +12,7 @@ import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.connectors.kafka.{FlinkKafkaConsumer, FlinkKafkaProducer}
 import org.apache.flink.util.Collector
 import tdrive.Implicits._
-import tdrive.shared.Haversine
+import tdrive.shared.{Haversine, Taxi, TaxiData, TaxiState}
 import tdrive.shared.dto._
 import tdrive.util.{KafkaSchemas, TaxiDataCounter}
 
@@ -51,12 +51,12 @@ object TaxiJob {
       val speed     = distance / deltaS * 3600D
       val avgSpeed  = (prev.speed * prev.count + speed) / (prev.count + 1)
 
-      prev.update(taxi, speed)
-      (TaxiData(taxi, distance, speed, avgSpeed), state)
+      prev.update(taxi, avgSpeed)
+      (TaxiData(taxi, distance, speed, avgSpeed), Some(prev))
     }
       .processToSink(locationOutput, _.taxi.asLocation, redisLocationSink)
-      .processToSink(currentSpeedOutput, _.asTaxiSpeeding, redisSpeedSink)
-      .processToFilteredSink[TaxiSpeed](avgSpeedOutput, _.asTaxiSpeed, _.speed >= 50D, redisAvgSpeedSink)
+      .processToSink(avgSpeedOutput, _.asTaxiAvgSpeed, redisAvgSpeedSink)
+      .processToFilteredSink[TaxiSpeeding](currentSpeedOutput, _.asTaxiSpeeding, _.speed >= 50D, redisSpeedSink)
 
 
     stream

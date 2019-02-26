@@ -7,7 +7,8 @@ import java.util.TimeZone
 import org.apache.flink.api.common.serialization.{DeserializationSchema, SerializationSchema}
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala.createTypeInformation
-import tdrive.shared.dto.{Taxi, TaxiLocation, TaxiSpeed, TaxiSpeeding}
+import tdrive.shared.Taxi
+import tdrive.shared.dto.{TaxiLocation, TaxiSpeed, TaxiSpeeding}
 
 /**
   * Created by 
